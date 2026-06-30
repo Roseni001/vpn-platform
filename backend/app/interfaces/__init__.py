@@ -1,0 +1,1 @@
+"""Application interfaces and contracts."""
