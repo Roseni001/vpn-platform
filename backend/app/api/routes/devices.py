@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.api.dependencies import get_device_service
+from app.api.dependencies import get_device_activation_service, get_device_service
 from app.models.device import (
     Device,
     DeviceActivationStatus,
@@ -12,6 +12,7 @@ from app.models.device import (
     DeviceStatus,
     DeviceUpdateData,
 )
+from app.services.device_activation import DeviceActivationService
 from app.services.devices import DeviceService
 
 router = APIRouter(prefix="/devices", tags=["devices"])
@@ -75,8 +76,41 @@ class DeviceResponse(BaseModel):
     updated_at: datetime
 
 
+class ActivationTokenResponse(BaseModel):
+    device_id: str
+    activation_token: str
+    expires_at: datetime
+
+
+class ActivationRequest(BaseModel):
+    activation_token: str = Field(min_length=1, max_length=256)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class RevokeActivationResponse(BaseModel):
+    device_id: str
+    activation_status: DeviceActivationStatus
+    revoked_tokens: int
+
+
 def to_device_response(device: Device) -> DeviceResponse:
     return DeviceResponse(**device.model_dump())
+
+
+@router.post(
+    "/activate",
+    response_model=DeviceResponse,
+    summary="Activate physical device by token",
+)
+async def activate_device_by_token(
+    payload: ActivationRequest,
+    activation_service: DeviceActivationService = Depends(
+        get_device_activation_service
+    ),
+) -> DeviceResponse:
+    device = await activation_service.activate_by_token(payload.activation_token)
+    return to_device_response(device)
 
 
 @router.post(
@@ -105,6 +139,58 @@ async def list_devices(
 ) -> list[DeviceResponse]:
     devices = await device_service.list_devices()
     return [to_device_response(device) for device in devices]
+
+
+@router.post(
+    "/{device_id}/activation-token",
+    response_model=ActivationTokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Generate device activation token",
+)
+async def generate_activation_token(
+    device_id: str,
+    activation_service: DeviceActivationService = Depends(
+        get_device_activation_service
+    ),
+) -> ActivationTokenResponse:
+    generated = await activation_service.generate_activation_token(device_id)
+    return ActivationTokenResponse(**generated.model_dump())
+
+
+@router.post(
+    "/{device_id}/revoke-activation",
+    response_model=RevokeActivationResponse,
+    summary="Revoke active device activation tokens",
+)
+async def revoke_activation(
+    device_id: str,
+    device_service: DeviceService = Depends(get_device_service),
+    activation_service: DeviceActivationService = Depends(
+        get_device_activation_service
+    ),
+) -> RevokeActivationResponse:
+    revoked_tokens = await activation_service.revoke_activation(device_id)
+    device = await device_service.get_device(device_id)
+    return RevokeActivationResponse(
+        device_id=device.id,
+        activation_status=device.activation_status,
+        revoked_tokens=revoked_tokens,
+    )
+
+
+@router.post(
+    "/{device_id}/activate-manually",
+    response_model=DeviceResponse,
+    summary="Manually activate physical device",
+)
+async def activate_device_manually(
+    device_id: str,
+    activation_service: DeviceActivationService = Depends(
+        get_device_activation_service
+    ),
+) -> DeviceResponse:
+    device = await activation_service.activate_manually(device_id)
+    return to_device_response(device)
 
 
 @router.get(
