@@ -5,7 +5,11 @@ from fastapi import Depends
 from app.core.config import Config, get_config
 from app.core.container import create_vpn_provider
 from app.interfaces.vpn_provider import VPNProvider
+from app.repositories.devices import DeviceRepository
+from app.services.devices import DeviceService
 from app.services.vpn import VPNService
+
+_device_repository = DeviceRepository()
 
 
 async def get_vpn_provider(
@@ -24,3 +28,8 @@ async def get_vpn_provider(
 def get_vpn_service(provider: VPNProvider = Depends(get_vpn_provider)) -> VPNService:
     """Build the application service from the provider interface."""
     return VPNService(provider=provider)
+
+
+def get_device_service() -> DeviceService:
+    """Build the Device Registry service."""
+    return DeviceService(repository=_device_repository)
