@@ -36,6 +36,10 @@ class DeviceService:
     async def list_devices(self) -> list[Device]:
         return await self._repository.list()
 
+    async def list_devices_by_owner(self, owner_user_id: str) -> list[Device]:
+        self._validate_owner_user_id(owner_user_id)
+        return await self._repository.list_by_owner(owner_user_id)
+
     async def get_device(self, device_id: str) -> Device:
         device = await self._repository.get(device_id)
         if device is None:
@@ -57,6 +61,25 @@ class DeviceService:
         if retired is None:
             raise DeviceNotFoundError(device_id)
 
+    async def assign_owner(self, device_id: str, owner_user_id: str) -> Device:
+        self._validate_owner_user_id(owner_user_id)
+
+        updated = await self._repository.update(
+            device_id,
+            {"owner_user_id": owner_user_id},
+        )
+        if updated is None:
+            raise DeviceNotFoundError(device_id)
+
+        return updated
+
+    async def unassign_owner(self, device_id: str) -> Device:
+        updated = await self._repository.update(device_id, {"owner_user_id": None})
+        if updated is None:
+            raise DeviceNotFoundError(device_id)
+
+        return updated
+
     @staticmethod
     def _validate_update(changes: dict[str, object]) -> None:
         # Optional PATCH fields may be omitted, but core enum fields must not be
@@ -64,3 +87,8 @@ class DeviceService:
         for field_name in ("status", "activation_status", "platform"):
             if field_name in changes and changes[field_name] is None:
                 raise DeviceValidationError(f"{field_name} cannot be null")
+
+    @staticmethod
+    def _validate_owner_user_id(owner_user_id: str) -> None:
+        if not owner_user_id.strip():
+            raise DeviceValidationError("owner_user_id cannot be empty")

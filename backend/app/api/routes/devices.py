@@ -56,6 +56,12 @@ class DeviceUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class AssignOwnerRequest(BaseModel):
+    owner_user_id: str = Field(min_length=1, max_length=128)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class DeviceResponse(BaseModel):
     id: str
     name: str | None
@@ -141,6 +147,19 @@ async def list_devices(
     return [to_device_response(device) for device in devices]
 
 
+@router.get(
+    "/by-owner/{owner_user_id}",
+    response_model=list[DeviceResponse],
+    summary="List physical devices by owner",
+)
+async def list_devices_by_owner(
+    owner_user_id: str,
+    device_service: DeviceService = Depends(get_device_service),
+) -> list[DeviceResponse]:
+    devices = await device_service.list_devices_by_owner(owner_user_id)
+    return [to_device_response(device) for device in devices]
+
+
 @router.post(
     "/{device_id}/activation-token",
     response_model=ActivationTokenResponse,
@@ -190,6 +209,33 @@ async def activate_device_manually(
     ),
 ) -> DeviceResponse:
     device = await activation_service.activate_manually(device_id)
+    return to_device_response(device)
+
+
+@router.post(
+    "/{device_id}/assign-owner",
+    response_model=DeviceResponse,
+    summary="Assign physical device owner",
+)
+async def assign_device_owner(
+    device_id: str,
+    payload: AssignOwnerRequest,
+    device_service: DeviceService = Depends(get_device_service),
+) -> DeviceResponse:
+    device = await device_service.assign_owner(device_id, payload.owner_user_id)
+    return to_device_response(device)
+
+
+@router.post(
+    "/{device_id}/unassign-owner",
+    response_model=DeviceResponse,
+    summary="Unassign physical device owner",
+)
+async def unassign_device_owner(
+    device_id: str,
+    device_service: DeviceService = Depends(get_device_service),
+) -> DeviceResponse:
+    device = await device_service.unassign_owner(device_id)
     return to_device_response(device)
 
 

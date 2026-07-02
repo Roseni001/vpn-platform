@@ -39,6 +39,17 @@ class DeviceRepository:
         async with self._lock:
             return sorted(self._devices.values(), key=lambda device: device.created_at)
 
+    async def list_by_owner(self, owner_user_id: str) -> list[Device]:
+        async with self._lock:
+            return sorted(
+                (
+                    device
+                    for device in self._devices.values()
+                    if device.owner_user_id == owner_user_id
+                ),
+                key=lambda device: device.created_at,
+            )
+
     async def get(self, device_id: str) -> Device | None:
         async with self._lock:
             return self._devices.get(device_id)
