@@ -7,12 +7,15 @@ from app.core.container import create_vpn_provider
 from app.interfaces.vpn_provider import VPNProvider
 from app.repositories.activation_tokens import ActivationTokenRepository
 from app.repositories.devices import DeviceRepository
+from app.repositories.vpn_assignments import DeviceVPNAssignmentRepository
 from app.services.device_activation import DeviceActivationService
+from app.services.device_vpn_assignments import DeviceVPNAssignmentService
 from app.services.devices import DeviceService
 from app.services.vpn import VPNService
 
 _device_repository = DeviceRepository()
 _activation_token_repository = ActivationTokenRepository()
+_vpn_assignment_repository = DeviceVPNAssignmentRepository()
 
 
 async def get_vpn_provider(
@@ -43,4 +46,15 @@ def get_device_activation_service() -> DeviceActivationService:
     return DeviceActivationService(
         device_repository=_device_repository,
         token_repository=_activation_token_repository,
+    )
+
+
+def get_device_vpn_assignment_service(
+    provider: VPNProvider = Depends(get_vpn_provider),
+) -> DeviceVPNAssignmentService:
+    """Собрать сервис назначения VPN-доступа устройству."""
+    return DeviceVPNAssignmentService(
+        device_repository=_device_repository,
+        assignment_repository=_vpn_assignment_repository,
+        vpn_provider=provider,
     )

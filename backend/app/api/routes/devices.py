@@ -3,7 +3,11 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.api.dependencies import get_device_activation_service, get_device_service
+from app.api.dependencies import (
+    get_device_activation_service,
+    get_device_service,
+    get_device_vpn_assignment_service,
+)
 from app.models.device import (
     Device,
     DeviceActivationStatus,
@@ -12,7 +16,9 @@ from app.models.device import (
     DeviceStatus,
     DeviceUpdateData,
 )
+from app.models.vpn_assignment import DeviceVPNAssignment
 from app.services.device_activation import DeviceActivationService
+from app.services.device_vpn_assignments import DeviceVPNAssignmentService
 from app.services.devices import DeviceService
 
 router = APIRouter(prefix="/devices", tags=["devices"])
@@ -100,8 +106,29 @@ class RevokeActivationResponse(BaseModel):
     revoked_tokens: int
 
 
+class DeviceVPNAssignmentResponse(BaseModel):
+    id: str
+    device_id: str
+    owner_user_id_snapshot: str
+    protocol_profile_id: str
+    provider: str
+    provider_client_id: str
+    provider_client_name: str | None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    assigned_at: datetime | None
+    revoked_at: datetime | None
+
+
 def to_device_response(device: Device) -> DeviceResponse:
     return DeviceResponse(**device.model_dump())
+
+
+def to_assignment_response(
+    assignment: DeviceVPNAssignment,
+) -> DeviceVPNAssignmentResponse:
+    return DeviceVPNAssignmentResponse(**assignment.model_dump())
 
 
 @router.post(
@@ -210,6 +237,52 @@ async def activate_device_manually(
 ) -> DeviceResponse:
     device = await activation_service.activate_manually(device_id)
     return to_device_response(device)
+
+
+@router.post(
+    "/{device_id}/vpn-assignment",
+    response_model=DeviceVPNAssignmentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create device VPN assignment",
+)
+async def create_device_vpn_assignment(
+    device_id: str,
+    assignment_service: DeviceVPNAssignmentService = Depends(
+        get_device_vpn_assignment_service
+    ),
+) -> DeviceVPNAssignmentResponse:
+    assignment = await assignment_service.create_assignment(device_id)
+    return to_assignment_response(assignment)
+
+
+@router.get(
+    "/{device_id}/vpn-assignment",
+    response_model=DeviceVPNAssignmentResponse,
+    summary="Get active device VPN assignment",
+)
+async def get_device_vpn_assignment(
+    device_id: str,
+    assignment_service: DeviceVPNAssignmentService = Depends(
+        get_device_vpn_assignment_service
+    ),
+) -> DeviceVPNAssignmentResponse:
+    assignment = await assignment_service.get_active_assignment(device_id)
+    return to_assignment_response(assignment)
+
+
+@router.post(
+    "/{device_id}/vpn-assignment/revoke",
+    response_model=DeviceVPNAssignmentResponse,
+    summary="Revoke active device VPN assignment",
+)
+async def revoke_device_vpn_assignment(
+    device_id: str,
+    assignment_service: DeviceVPNAssignmentService = Depends(
+        get_device_vpn_assignment_service
+    ),
+) -> DeviceVPNAssignmentResponse:
+    assignment = await assignment_service.revoke_assignment(device_id)
+    return to_assignment_response(assignment)
 
 
 @router.post(
